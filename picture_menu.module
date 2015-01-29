@@ -1,0 +1,557 @@
+<?php
+
+/**
+ * @file
+ * Defines hierarchical text field types.
+ */
+
+
+/**
+ * Implements hook_field_info().
+ */
+function picture_menu_field_info() {
+  return array(
+    'picture_menu' => array(
+      'label' => t('Accordion tree'),
+      'description' => t('This field stores long text along with a header'),
+      'instance_settings' => array('text_processing' => 1),
+      'default_widget' => 'picture_menu_textfield',
+      'default_formatter' => 'picture_menu_default',
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_field_settings_form().
+ */
+function picture_menu_field_settings_form($field, $instance, $has_data) {
+  $settings = $field['settings'];
+  $form = array();
+  return $form;
+}
+
+
+/**
+ * Implements hook_field_instance_settings_form().
+ */
+function picture_menu_field_instance_settings_form($field, $instance) {
+  $settings = $instance['settings'];
+  $form['text_processing'] = array(
+    '#type' => 'radios',
+    '#title' => t('Text processing'),
+    '#default_value' => $settings['text_processing'],
+    '#options' => array(
+      t('Plain text'),
+      t('Filtered text (user selects text format)'),
+    ),
+  );
+
+  return $form;
+}
+
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function picture_menu_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
+  if ('field_ui_field_edit_form' == $form_id) {
+    $types = array(
+      'picture_menu',
+    );
+    if (in_array($form['#field']['type'], $types)) {
+      $form['field']['cardinality']['#default_value'] = FIELD_CARDINALITY_UNLIMITED;
+      $form['field']['cardinality']['#access'] = FALSE;
+    }
+  }
+}
+
+
+/**
+ * Implements hook_field_validate().
+ */
+function picture_menu_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+  text_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, $errors);
+}
+
+
+/**
+ * Implements hook_field_load().
+ */
+function picture_menu_field_load($entity_type, $entities, $field, $instances, $langcode, &$items) {
+  foreach ($entities as $id => $entity) {
+    foreach ($items[$id] as $delta => $item) {
+      if (empty($instances[$id]['settings']['text_processing']) || filter_format_allowcache($item['format'])) {
+        $items[$id][$delta]['safe_value'] = isset($item['value']) ? _text_sanitize($instances[$id], $langcode, $item, 'value') : '';
+      }
+    }
+  }
+}
+
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function picture_menu_field_is_empty($item, $field) {
+  return text_field_is_empty($item, NULL);
+}
+
+
+/**
+ * Implements hook_field_formatter_info().
+ */
+function picture_menu_field_formatter_info() {
+  $types = array(
+    'picture_menu',
+  );
+  return array(
+    'picture_menu_default' => array(
+      'label' => t('Default'),
+      'field types' => $types,
+    ),
+    'picture_menu_plain' => array(
+      'label' => t('Plain text'),
+      'field types' => $types,
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_field_formatter_settings_form().
+ */
+function picture_menu_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state) {
+  return text_field_formatter_settings_form($field, $instance, $view_mode, $form, $form_state);
+}
+
+
+/**
+ * Implements hook_field_formatter_settings_summary().
+ */
+function picture_menu_field_formatter_settings_summary($field, $instance, $view_mode) {
+  return text_field_formatter_settings_summary($field, $instance, $view_mode);
+}
+
+
+/**
+ * Implements hook_field_formatter_view().
+ */
+function picture_menu_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+  foreach ($items as $delta => $item) {
+    $outputbody = _text_sanitize($instance, $langcode, $item, 'value');
+    //$outputbody = $item['value'];  // Temporarily override the text_sanitization until I figure out why it doesn't work properly!
+    $outputheader = $item['header'];
+    //$outputheader = _text_sanitize($instance, $langcode, $item, 'header');
+    
+    
+    $element[$delta] = array(
+      '#header' => $outputheader,
+      '#body' => $outputbody,
+    );
+  }
+  
+  $tree = array();
+  $refs = array(0 => &$tree);
+  $depth = 1;
+  $depths = array(0 => $depth);
+  
+  foreach ($element as $delta => $item) {
+
+    $parent = $items[$delta]['parent'];
+    if (isset($depths[$parent])) {
+      $depth = $depths[$parent];
+    }
+    else {
+      $depths[$delta] = ++$depth;
+    }
+    $refs[$parent][] = array(
+      'header' => $item['#header'],
+      'body' => $item['#body'],
+      'children' => array(),
+      'class' => array('depth depth-' . $depth),
+    );
+    $refs[$delta + 1] = &$refs[$parent][count($refs[$parent]) - 1]['children'];
+  }
+  if ($tree) {
+    $result = array(
+      array(
+        '#markup' => theme('nested_accordion', array(
+          'items' => $tree,
+          'attributes' => array('class' => array('depth', 'depth-0')),
+        )),
+      ),
+    );
+  }
+  else {
+    $result = FALSE;
+  }
+  return $result;
+}
+
+
+/**
+ * Returns HTML for the accordion output
+ */
+
+function theme_nested_accordion($vars) {
+  $output = '';
+
+  drupal_add_css(drupal_get_path('module', 'picture_menu') . '/picture_menu.css');
+  drupal_add_js(drupal_get_path('module', 'picture_menu') . '/picture_menu_display.js');
+  drupal_add_js(drupal_get_path('module', 'picture_menu') . '/jquery.nestedAccordion.js');
+
+  $output .= '<div id="' . drupal_html_id('accordion') . '">';
+  $output .= theme_nested_accordion_items($vars);
+  $output .= '</div>';
+  return $output;
+}
+
+function theme_nested_accordion_items($vars) {
+  $output = '';
+  $items = $vars['items'];
+  $attributes = $vars['attributes'];
+  if (!empty($items)) {
+    $output .= '<ul id="' . drupal_html_id('accordion') . '" ' . drupal_attributes($attributes) . '>';
+    $num_items = count($items);
+    $i = 0;
+    foreach ($items as $item) {
+      $attributes = array();
+      $children = array();
+      $header = '';
+      $body = '';
+      $i++;
+      if (is_array($item)) {
+        foreach ($item as $key => $value) {
+          if($key == 'header') {
+            $header = $value;
+          } elseif ($key == 'body') {
+            $body = $value;
+          } elseif ($key == 'children') {
+            $children = $value;
+          } else {
+            $attributes[$key] = $value;
+          }
+        }
+      } else {
+        $data = $item;
+      }
+      $output .= '<li' . drupal_attributes($attributes) . '>';
+      $output .= '  <h3>' . $header . '</h3>';
+      $output .= '  <div class="accordion_body">';
+      $output .=      $body;
+      
+      if (count($children) > 0) {
+        // Render nested list.
+        $output .= theme_nested_accordion(array('items' => $children, 'attributes' => $attributes));
+      }
+      
+      $output .= '  </div>';
+      $output .= '</li>';
+    }
+    $output .= "</ul>";
+  }
+  return $output;
+}
+
+
+/**
+ * Implements hook_field_widget_info().
+ */
+function picture_menu_field_widget_info() {
+  return array(
+    'picture_menu_textfield' => array(
+      'label' => t('Header and rich text area'),
+      'field types' => array('picture_menu'),
+      'settings' => array('rows' => 5),
+    ),
+  );
+}
+
+
+/**
+ * Implements hook_field_widget_settings_form().
+ */
+function picture_menu_field_widget_settings_form($field, $instance) {
+  $widget = $instance['widget'];
+  $settings = $widget['settings'];
+  $form['rows'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Rows'),
+    '#default_value' => $settings['rows'],
+    '#required' => TRUE,
+    '#element_validate' => array('element_validate_integer_positive'),
+  );
+
+  return $form;
+}
+
+
+/**
+ * Implements hook_field_widget_form().
+ * 
+ * This function creates the field elements on the edit page.
+ *
+ */
+function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+  $element['header'] = array(
+    '#title' => 'Item Header',
+    '#type' => 'textfield',
+    '#default_value' => isset($items[$delta]['header'])? $items[$delta]['header'] : NULL,
+    '#size' => 80,
+    '#maxlength' => 255,
+    '#attributes' => array('class' => array('text-full')),
+    '#description' => 'Becomes the clickable header to expand this item',
+  );
+  
+  $element['value'] = array(
+    '#title' => 'Item Body',
+    '#type' => 'text_format',
+    '#base_type' => 'textarea',
+    '#default_value' => isset($items[$delta]['value']) ? $items[$delta]['value'] : NULL,
+    '#rows' => $instance['widget']['settings']['rows'],
+    '#attributes' => array('class' => array('text-full')),
+    '#description' => 'The content that appears after clicking the header.  Using header tags here may break the accordion.',
+    '#format' => isset($items[$delta]['format']) ? $items[$delta]['format'] : filter_default_format(),
+    //'#format' => isset($items[$delta]['format']) ? filter_default_format() : filter_default_format(),
+  );
+  return $element;
+}
+
+/**
+ * Implements hook_field_presave().
+ */
+function picture_menu_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+  foreach ($items as $delta => $item) {
+  
+    // Fix the values from the rich text editor
+	  $item['format'] = $item['value']['format'];
+    $item['value'] = $item['value']['value'];
+    $items[$delta] = $item;
+    
+    // Remove any items where the header and value are empty - this is a HACK - it should do this automatically, shouldn't it?!
+    if(empty($item['header']) and empty($item['value'])) {
+      unset($items[$delta]);
+    }
+  }
+}
+
+
+/**
+ * Implements hook_field_widget_error().
+ */
+function picture_menu_field_widget_error($element, $error, $form, &$form_state) {
+  text_field_widget_error($element, $error, $form, $form_state);
+}
+
+
+/**
+ * Wrapper for hook_field_attach_form() and hook_field_attach_submit().
+ */
+function _picture_menu_field_invoke($op, $entity_type, $entity, &$form, &$form_state) {
+  list(, , $bundle) = entity_extract_ids($entity_type, $entity);
+  $instances = field_info_instances($entity_type, $bundle);
+  $function = '_picture_menu_field_' . $op;
+  $types = array(
+    'picture_menu',
+  );
+  foreach ($instances as $instance) {
+    $field_name = $instance['field_name'];
+    $field = field_info_field($field_name);
+    if (in_array($field['type'], $types)) {
+      $function($field_name, $entity, $form, $form_state);
+    }
+  }
+}
+
+
+/**
+ * Implements hook_field_attach_form().
+ */
+function picture_menu_field_attach_form($entity_type, $entity, &$form, &$form_state) {
+  _picture_menu_field_invoke('form', $entity_type, $entity, $form, $form_state);
+}
+
+
+/**
+ * Implements hook_field_attach_submit().
+ */
+function picture_menu_field_attach_submit($entity_type, $entity, $form, &$form_state) {
+  _picture_menu_field_invoke('submit', $entity_type, $entity, $form, $form_state);
+}
+
+
+/**
+ * Extends field's form with hierarchical functionality.
+ */
+function _picture_menu_field_form($name, $entity, &$form, $form_state) {
+  foreach ($form[$name] as $l => &$field) {
+    if ('#' !== $l[0]) {
+      foreach ($field as $delta => &$item) {
+        if (is_numeric($delta)) {
+          $item['parent'] = array(
+            '#type' => 'hidden',
+            '#title' => t('Parent'),
+            '#default_value' => isset($entity->{$name}[$l][$delta]['parent']) ? $entity->{$name}[$l][$delta]['parent'] - 1 : -1,
+            '#attributes' => array(
+              'class' => array('parent'),
+            ),
+          );
+          $item['delta'] = array(
+            '#type' => 'hidden',
+            '#title' => t('Delta'),
+            '#default_value' => $delta,
+            '#attributes' => array(
+              'class' => array('delta'),
+            ),
+          );
+        }
+      }
+      $field['#theme'] = 'picture_menu';
+    }
+  }
+}
+
+
+/**
+ * Perform necessary operations on field data submitted by a form.
+ */
+function _picture_menu_field_submit($name, $entity, $form, &$form_state) {
+  foreach ($form_state['values'][$name] as $l => &$items) {
+    if (isset($items['add_more'])) {
+      unset($items['add_more']);
+    }
+   
+    $weights = array();
+    foreach ($items as $delta => $item) {
+      $weights[] = $items[$delta]['_weight'];
+    }
+    sort($weights);
+    $weights = array_flip($weights);
+    foreach ($items as $delta => $item) {
+      $items[$delta]['parent'] = -1 != $items[$delta]['parent'] ? $weights[$items[$items[$delta]['parent']]['_weight']] + 1 : 0;
+    }
+    usort($items, '_field_sort_items_helper');
+    $items[0]['parent'] = 0;
+    while (count($items) && !$items[count($items) - 1]['value']) {
+      array_pop($items);
+    }
+    if (array() !== $items || isset($entity->{$name}[$l])) {
+      $entity->{$name}[$l] = $items;
+    }
+  }
+}
+
+
+/**
+ * Implements hook_field_prepare_translation().
+ */
+function picture_menu_field_prepare_translation($entity_type, $entity, $field, $instance, $langcode, &$items, $source_entity, $source_langcode) {
+  text_field_prepare_translation($entity_type, $entity, $field, $instance, $langcode, $items, $source_entity, $source_langcode);
+}
+
+
+/**
+ * Implements hook_filter_format_update().
+ */
+function picture_menu_filter_format_update($format) {
+  field_cache_clear();
+}
+
+/**
+ * Implements hook_filter_format_disable().
+ */
+function picture_menu_filter_format_disable($format) {
+  field_cache_clear();
+}
+
+
+/**
+ * Implements hook_theme().
+ */
+function picture_menu_theme() {
+  return array(
+    'picture_menu' => array(
+      'render element' => 'element',
+    ),
+    'nested_accordion' => array(
+      'render element' => 'element',
+    ),
+  );
+}
+
+
+
+
+
+/**
+ * Returns HTML for text hierarchical widget.
+ */
+function theme_picture_menu($vars) {
+  $element = $vars['element'];
+  $output = '';
+  $table_id = drupal_html_id($element['#field_name'] . '_values');
+  $required = !empty($element['#required']) ? theme('form_required_marker', $vars) : '';
+  $header = array(
+    array(
+      'data' => t('Items'),
+      'class' => array('tabledrag-hide'),
+    ),
+    t('Order'),
+  );
+  $rows = array();
+  $items = array();
+  foreach (element_children($element) as $key) {
+    if ('add_more' === $key) {
+      $add_more_button = &$element[$key];
+    }
+    else {
+      $items[] = &$element[$key];
+    }
+  }
+  $depths = array(-1 => -1);
+  foreach ($items as $item) {
+    $item['_weight']['#attributes']['class'] = array('weight');
+    $depth = 0;
+    if (isset($depths[$item['parent']['#value']])) {
+      $depth = $depths[$item['parent']['#value']] + 1;
+      $depths[$item['delta']['#value']] = $depth;
+    }
+    $weight = drupal_render($item['_weight']);
+    $cells = array(
+      theme('indentation', array('size' => $depth)) . '<div class="accordion-tree-form-item">' . drupal_render($item) . '</div>',
+      $weight,
+    );
+    $rows[] = array(
+      'data' => $cells,
+      'class' => array('draggable'),
+    );
+  }
+  $output = '<a class="accordionitem-showhide" href="#hide">Show/hide item bodies to rearrange</a>';
+  $output .= '<div class="form-item">' . theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array('id' => $table_id),
+  )) . ($element['#description'] ? '<div class="description">' . $element['#description'] . '</div>' : '')
+    . '<div class="clearfix">' . drupal_render($add_more_button) . '</div></div>';
+  drupal_add_tabledrag($table_id, 'match', 'parent', 'parent', NULL, 'delta', FALSE);
+  drupal_add_tabledrag($table_id, 'order', 'sibling', 'weight', NULL, 'weight');
+  drupal_add_css(drupal_get_path('module', 'picture_menu') . '/picture_menu.css');
+  drupal_add_js(drupal_get_path('module', 'picture_menu') . '/picture_menu.js');
+  $output = array(
+    'items' => array(
+      '#type' => 'fieldset',
+      '#title' => t('!title !required', array(
+        '!title' => $element['#title'],
+        '!required' => $required,
+      )),
+      '#attributes' => array('class' => array('collapsible')),
+      'content' => array(
+        '#markup' => $output,
+      ),
+    ),
+    '#attached' => array('js' => array('misc/collapse.js', 'misc/form.js')),
+  );
+
+  return drupal_render($output);
+}

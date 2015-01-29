@@ -1,0 +1,46 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the picture_menu module.
+ */
+
+/**
+ * Implements hook_field_schema().
+ */
+function picture_menu_field_schema($field) {
+  $columns = array(
+    'value' => array(
+      'type' => 'text',
+      'size' => 'big',
+      'not null' => FALSE,
+    ),
+    'header' => array(
+      'type' => 'varchar',
+      'length' => '255',
+      'not null' => FALSE,
+    ),
+    'format' => array(
+      'type' => 'varchar',
+      'length' => 255,
+      'not null' => FALSE,
+    ),
+    'parent' => array(
+      'type' => 'int',
+      'unsigned' => TRUE,
+      'not null' => FALSE,
+    ),
+  );
+  return array(
+    'columns' => $columns,
+    'indexes' => array(
+      'format' => array('format'),
+    ),
+    'foreign keys' => array(
+      'format' => array(
+        'table' => 'filter_format',
+        'columns' => array('format' => 'format'),
+      ),
+    ),
+  );
+}
