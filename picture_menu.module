@@ -62,7 +62,7 @@ function picture_menu_field_instance_settings_form($field, $instance) {
  */
 function picture_menu_form_field_ui_field_edit_form_alter(&$form, &$form_state, $form_id) {
   if ('field_ui_field_edit_form' == $form_id) {
-    $types = array(
+  $types = array(
       'picture_menu',
     );
     if (in_array($form['#field']['type'], $types)) {
@@ -143,23 +143,13 @@ function picture_menu_field_formatter_view($entity_type, $entity, $field, $insta
       '#body' => $item['fid'],
     );
   }
-  
-  $tree = array();
-  $refs = array(0 => &$tree);
-
-  if ($tree) {
-    $result = array(
-      array(
-        '#markup' => theme('picture_menu', array(
-          'items' => $tree,
-          'attributes' => array('class' => array('depth', 'depth-0')),
-        )),
-      ),
-    );
-  }
-  else {
-    $result = FALSE;
-  }
+  $result = array(
+    array(
+      '#markup' => theme('picture_menu', array(
+        'items' => $items,
+      )),
+    ),
+  );
   return $result;
 }
 
@@ -172,13 +162,15 @@ function theme_picture_menu($vars) {
   $output = '';
 
   $output .= '<div id="' . drupal_html_id('picture-menu') . '">';
-  $output .= theme_picture_menu_items($vars);
+  foreach($vars['items'] as $delta => $item) {
+    $output .= theme_picture_menu_item($item, $delta);
+  }
   $output .= '</div>';
   return $output;
 }
 
-function theme_picture_menu_items($vars) {
-  $output = 'Not implemented yet';
+function theme_picture_menu_item($item, $delta) {
+  $output = "item$delta";
   return $output;
 }
 
@@ -242,16 +234,6 @@ function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance,
  */
 function picture_menu_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
   foreach ($items as $delta => $item) {
-  
-    // Fix the values from the rich text editor
-	  $item['format'] = $item['value']['format'];
-    $item['value'] = $item['value']['value'];
-    $items[$delta] = $item;
-    
-    // Remove any items where the header and value are empty - this is a HACK - it should do this automatically, shouldn't it?!
-    if(empty($item['header']) and empty($item['value'])) {
-      unset($items[$delta]);
-    }
   }
 }
 
@@ -344,7 +326,7 @@ function picture_menu_theme() {
 
 
 /**
- * Returns HTML for text hierarchical widget.
+ * Returns HTML for picture menu admin widget.
  */
 function theme_picture_menu_admin($vars) {
  $element = $vars['element'];
@@ -416,9 +398,24 @@ function _picture_menu_field_form($name, $entity, &$form, $form_state) {
   }
 }
 
-/**
- * Perform necessary operations on field data submitted by a form.
- */
 function _picture_menu_field_submit($name, $entity, $form, &$form_state) {
-
+  foreach ($form_state['values'][$name] as $l => &$items) {
+    if (isset($items['add_more'])) {
+      unset($items['add_more']);
+    }
+   
+    $weights = array();
+    foreach ($items as $delta => $item) {
+      $weights[] = $items[$delta]['_weight'];
+    }
+    sort($weights);
+    usort($items, '_field_sort_items_helper');
+    $items[0]['parent'] = 0;
+    while (count($items) && !$items[count($items) - 1]['description']) {
+      array_pop($items);
+    }
+    if (array() !== $items || isset($entity->{$name}[$l])) {
+      $entity->{$name}[$l] = $items;
+    }
+  }
 }
