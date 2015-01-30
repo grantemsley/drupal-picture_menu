@@ -9,37 +9,30 @@
  * Implements hook_field_schema().
  */
 function picture_menu_field_schema($field) {
-  $columns = array(
-    'value' => array(
-      'type' => 'text',
-      'size' => 'big',
-      'not null' => FALSE,
-    ),
-    'header' => array(
-      'type' => 'varchar',
-      'length' => '255',
-      'not null' => FALSE,
-    ),
-    'format' => array(
-      'type' => 'varchar',
-      'length' => 255,
-      'not null' => FALSE,
-    ),
-    'parent' => array(
-      'type' => 'int',
-      'unsigned' => TRUE,
-      'not null' => FALSE,
-    ),
-  );
   return array(
-    'columns' => $columns,
+    'columns' => array(
+      'header' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+      ),
+      'fid' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+      ),    
+      'description' => array(
+        'type' => 'text',
+        'size' => 'normal',
+        'not null' => FALSE,
+      ),
+    ),
     'indexes' => array(
-      'format' => array('format'),
+      'fid' => array('fid'),
     ),
     'foreign keys' => array(
-      'format' => array(
-        'table' => 'filter_format',
-        'columns' => array('format' => 'format'),
+      'fid' => array(
+        'table' => 'file_managed',
+        'columns' => array('fid' => 'fid'),
       ),
     ),
   );

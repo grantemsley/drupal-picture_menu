@@ -12,10 +12,12 @@
 function picture_menu_field_info() {
   return array(
     'picture_menu' => array(
-      'label' => t('Accordion tree'),
-      'description' => t('This field stores long text along with a header'),
-      'instance_settings' => array('text_processing' => 1),
-      'default_widget' => 'picture_menu_textfield',
+      'label' => t('Picture Menu'),
+      'description' => t('This field creates picture menus with a header, image and description'),
+      'instance_settings' => array(
+        'headertag' => 'h3',
+      ),
+      'default_widget' => 'picture_menu_widget',
       'default_formatter' => 'picture_menu_default',
     ),
   );
@@ -37,14 +39,18 @@ function picture_menu_field_settings_form($field, $instance, $has_data) {
  */
 function picture_menu_field_instance_settings_form($field, $instance) {
   $settings = $instance['settings'];
-  $form['text_processing'] = array(
-    '#type' => 'radios',
-    '#title' => t('Text processing'),
-    '#default_value' => $settings['text_processing'],
+  $form['headertag'] = array(
+    '#type' => 'select',
+    '#title' => t('Header Tag'),
+    '#default_value' => $settings['headertag'],
     '#options' => array(
-      t('Plain text'),
-      t('Filtered text (user selects text format)'),
+      t('h1'),
+      t('h2'),
+      t('h3'),
+      t('h4'),
+      t('h5'),      
     ),
+    '#description' => t('Controls which header tag is used for the item titles - accessibility guidelines may require a specific header level.'),
   );
 
   return $form;
@@ -81,9 +87,6 @@ function picture_menu_field_validate($entity_type, $entity, $field, $instance, $
 function picture_menu_field_load($entity_type, $entities, $field, $instances, $langcode, &$items) {
   foreach ($entities as $id => $entity) {
     foreach ($items[$id] as $delta => $item) {
-      if (empty($instances[$id]['settings']['text_processing']) || filter_format_allowcache($item['format'])) {
-        $items[$id][$delta]['safe_value'] = isset($item['value']) ? _text_sanitize($instances[$id], $langcode, $item, 'value') : '';
-      }
     }
   }
 }
@@ -107,10 +110,6 @@ function picture_menu_field_formatter_info() {
   return array(
     'picture_menu_default' => array(
       'label' => t('Default'),
-      'field types' => $types,
-    ),
-    'picture_menu_plain' => array(
-      'label' => t('Plain text'),
       'field types' => $types,
     ),
   );
@@ -139,44 +138,19 @@ function picture_menu_field_formatter_settings_summary($field, $instance, $view_
 function picture_menu_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
   $element = array();
   foreach ($items as $delta => $item) {
-    $outputbody = _text_sanitize($instance, $langcode, $item, 'value');
-    //$outputbody = $item['value'];  // Temporarily override the text_sanitization until I figure out why it doesn't work properly!
-    $outputheader = $item['header'];
-    //$outputheader = _text_sanitize($instance, $langcode, $item, 'header');
-    
-    
     $element[$delta] = array(
-      '#header' => $outputheader,
-      '#body' => $outputbody,
+      '#header' => $item['header'],
+      '#body' => $item['fid'],
     );
   }
   
   $tree = array();
   $refs = array(0 => &$tree);
-  $depth = 1;
-  $depths = array(0 => $depth);
-  
-  foreach ($element as $delta => $item) {
 
-    $parent = $items[$delta]['parent'];
-    if (isset($depths[$parent])) {
-      $depth = $depths[$parent];
-    }
-    else {
-      $depths[$delta] = ++$depth;
-    }
-    $refs[$parent][] = array(
-      'header' => $item['#header'],
-      'body' => $item['#body'],
-      'children' => array(),
-      'class' => array('depth depth-' . $depth),
-    );
-    $refs[$delta + 1] = &$refs[$parent][count($refs[$parent]) - 1]['children'];
-  }
   if ($tree) {
     $result = array(
       array(
-        '#markup' => theme('nested_accordion', array(
+        '#markup' => theme('picture_menu', array(
           'items' => $tree,
           'attributes' => array('class' => array('depth', 'depth-0')),
         )),
@@ -191,66 +165,20 @@ function picture_menu_field_formatter_view($entity_type, $entity, $field, $insta
 
 
 /**
- * Returns HTML for the accordion output
+ * Returns HTML for the picture menu
  */
 
-function theme_nested_accordion($vars) {
+function theme_picture_menu($vars) {
   $output = '';
 
-  drupal_add_css(drupal_get_path('module', 'picture_menu') . '/picture_menu.css');
-  drupal_add_js(drupal_get_path('module', 'picture_menu') . '/picture_menu_display.js');
-  drupal_add_js(drupal_get_path('module', 'picture_menu') . '/jquery.nestedAccordion.js');
-
-  $output .= '<div id="' . drupal_html_id('accordion') . '">';
-  $output .= theme_nested_accordion_items($vars);
+  $output .= '<div id="' . drupal_html_id('picture-menu') . '">';
+  $output .= theme_picture_menu_items($vars);
   $output .= '</div>';
   return $output;
 }
 
-function theme_nested_accordion_items($vars) {
-  $output = '';
-  $items = $vars['items'];
-  $attributes = $vars['attributes'];
-  if (!empty($items)) {
-    $output .= '<ul id="' . drupal_html_id('accordion') . '" ' . drupal_attributes($attributes) . '>';
-    $num_items = count($items);
-    $i = 0;
-    foreach ($items as $item) {
-      $attributes = array();
-      $children = array();
-      $header = '';
-      $body = '';
-      $i++;
-      if (is_array($item)) {
-        foreach ($item as $key => $value) {
-          if($key == 'header') {
-            $header = $value;
-          } elseif ($key == 'body') {
-            $body = $value;
-          } elseif ($key == 'children') {
-            $children = $value;
-          } else {
-            $attributes[$key] = $value;
-          }
-        }
-      } else {
-        $data = $item;
-      }
-      $output .= '<li' . drupal_attributes($attributes) . '>';
-      $output .= '  <h3>' . $header . '</h3>';
-      $output .= '  <div class="accordion_body">';
-      $output .=      $body;
-      
-      if (count($children) > 0) {
-        // Render nested list.
-        $output .= theme_nested_accordion(array('items' => $children, 'attributes' => $attributes));
-      }
-      
-      $output .= '  </div>';
-      $output .= '</li>';
-    }
-    $output .= "</ul>";
-  }
+function theme_picture_menu_items($vars) {
+  $output = 'Not implemented yet';
   return $output;
 }
 
@@ -260,10 +188,9 @@ function theme_nested_accordion_items($vars) {
  */
 function picture_menu_field_widget_info() {
   return array(
-    'picture_menu_textfield' => array(
-      'label' => t('Header and rich text area'),
+    'picture_menu_widget' => array(
+      'label' => t('Picture menu'),
       'field types' => array('picture_menu'),
-      'settings' => array('rows' => 5),
     ),
   );
 }
@@ -273,17 +200,7 @@ function picture_menu_field_widget_info() {
  * Implements hook_field_widget_settings_form().
  */
 function picture_menu_field_widget_settings_form($field, $instance) {
-  $widget = $instance['widget'];
-  $settings = $widget['settings'];
-  $form['rows'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Rows'),
-    '#default_value' => $settings['rows'],
-    '#required' => TRUE,
-    '#element_validate' => array('element_validate_integer_positive'),
-  );
 
-  return $form;
 }
 
 
@@ -295,25 +212,27 @@ function picture_menu_field_widget_settings_form($field, $instance) {
  */
 function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
   $element['header'] = array(
-    '#title' => 'Item Header',
+    '#title' => 'Header',
     '#type' => 'textfield',
     '#default_value' => isset($items[$delta]['header'])? $items[$delta]['header'] : NULL,
     '#size' => 80,
     '#maxlength' => 255,
-    '#attributes' => array('class' => array('text-full')),
-    '#description' => 'Becomes the clickable header to expand this item',
+    '#description' => 'The header above the image',
   );
   
-  $element['value'] = array(
-    '#title' => 'Item Body',
-    '#type' => 'text_format',
-    '#base_type' => 'textarea',
-    '#default_value' => isset($items[$delta]['value']) ? $items[$delta]['value'] : NULL,
-    '#rows' => $instance['widget']['settings']['rows'],
-    '#attributes' => array('class' => array('text-full')),
-    '#description' => 'The content that appears after clicking the header.  Using header tags here may break the accordion.',
-    '#format' => isset($items[$delta]['format']) ? $items[$delta]['format'] : filter_default_format(),
-    //'#format' => isset($items[$delta]['format']) ? filter_default_format() : filter_default_format(),
+  $element['fid'] = array(
+    '#title' => 'Image',
+    '#type' => 'managed_file',
+    '#description' => t('The image to use for this item'),
+    '#default_value' => isset($items[$delta]['fid'])? $items[$delta]['fid'] : NULL,
+    '#upload_location' => 'public://picture_menu_images/',
+  );
+  
+  $element['description'] = array(
+    '#title' => 'Description',
+    '#type' => 'textfield',
+    '#default_value' => isset($items[$delta]['description']) ? $items[$delta]['description'] : NULL,
+    '#description' => 'The short description that appears under the image',
   );
   return $element;
 }
@@ -381,66 +300,6 @@ function picture_menu_field_attach_submit($entity_type, $entity, $form, &$form_s
 }
 
 
-/**
- * Extends field's form with hierarchical functionality.
- */
-function _picture_menu_field_form($name, $entity, &$form, $form_state) {
-  foreach ($form[$name] as $l => &$field) {
-    if ('#' !== $l[0]) {
-      foreach ($field as $delta => &$item) {
-        if (is_numeric($delta)) {
-          $item['parent'] = array(
-            '#type' => 'hidden',
-            '#title' => t('Parent'),
-            '#default_value' => isset($entity->{$name}[$l][$delta]['parent']) ? $entity->{$name}[$l][$delta]['parent'] - 1 : -1,
-            '#attributes' => array(
-              'class' => array('parent'),
-            ),
-          );
-          $item['delta'] = array(
-            '#type' => 'hidden',
-            '#title' => t('Delta'),
-            '#default_value' => $delta,
-            '#attributes' => array(
-              'class' => array('delta'),
-            ),
-          );
-        }
-      }
-      $field['#theme'] = 'picture_menu';
-    }
-  }
-}
-
-
-/**
- * Perform necessary operations on field data submitted by a form.
- */
-function _picture_menu_field_submit($name, $entity, $form, &$form_state) {
-  foreach ($form_state['values'][$name] as $l => &$items) {
-    if (isset($items['add_more'])) {
-      unset($items['add_more']);
-    }
-   
-    $weights = array();
-    foreach ($items as $delta => $item) {
-      $weights[] = $items[$delta]['_weight'];
-    }
-    sort($weights);
-    $weights = array_flip($weights);
-    foreach ($items as $delta => $item) {
-      $items[$delta]['parent'] = -1 != $items[$delta]['parent'] ? $weights[$items[$items[$delta]['parent']]['_weight']] + 1 : 0;
-    }
-    usort($items, '_field_sort_items_helper');
-    $items[0]['parent'] = 0;
-    while (count($items) && !$items[count($items) - 1]['value']) {
-      array_pop($items);
-    }
-    if (array() !== $items || isset($entity->{$name}[$l])) {
-      $entity->{$name}[$l] = $items;
-    }
-  }
-}
 
 
 /**
@@ -471,10 +330,10 @@ function picture_menu_filter_format_disable($format) {
  */
 function picture_menu_theme() {
   return array(
-    'picture_menu' => array(
+    'picture_menu_admin' => array(
       'render element' => 'element',
     ),
-    'nested_accordion' => array(
+    'picture_menu' => array(
       'render element' => 'element',
     ),
   );
@@ -487,8 +346,8 @@ function picture_menu_theme() {
 /**
  * Returns HTML for text hierarchical widget.
  */
-function theme_picture_menu($vars) {
-  $element = $vars['element'];
+function theme_picture_menu_admin($vars) {
+ $element = $vars['element'];
   $output = '';
   $table_id = drupal_html_id($element['#field_name'] . '_values');
   $required = !empty($element['#required']) ? theme('form_required_marker', $vars) : '';
@@ -513,10 +372,6 @@ function theme_picture_menu($vars) {
   foreach ($items as $item) {
     $item['_weight']['#attributes']['class'] = array('weight');
     $depth = 0;
-    if (isset($depths[$item['parent']['#value']])) {
-      $depth = $depths[$item['parent']['#value']] + 1;
-      $depths[$item['delta']['#value']] = $depth;
-    }
     $weight = drupal_render($item['_weight']);
     $cells = array(
       theme('indentation', array('size' => $depth)) . '<div class="accordion-tree-form-item">' . drupal_render($item) . '</div>',
@@ -534,10 +389,7 @@ function theme_picture_menu($vars) {
     'attributes' => array('id' => $table_id),
   )) . ($element['#description'] ? '<div class="description">' . $element['#description'] . '</div>' : '')
     . '<div class="clearfix">' . drupal_render($add_more_button) . '</div></div>';
-  drupal_add_tabledrag($table_id, 'match', 'parent', 'parent', NULL, 'delta', FALSE);
   drupal_add_tabledrag($table_id, 'order', 'sibling', 'weight', NULL, 'weight');
-  drupal_add_css(drupal_get_path('module', 'picture_menu') . '/picture_menu.css');
-  drupal_add_js(drupal_get_path('module', 'picture_menu') . '/picture_menu.js');
   $output = array(
     'items' => array(
       '#type' => 'fieldset',
@@ -554,4 +406,19 @@ function theme_picture_menu($vars) {
   );
 
   return drupal_render($output);
+}
+
+function _picture_menu_field_form($name, $entity, &$form, $form_state) {
+  foreach ($form[$name] as $l => &$field) {
+    if ('#' !== $l[0]) {
+      $field['#theme'] = 'picture_menu_admin';
+    }
+  }
+}
+
+/**
+ * Perform necessary operations on field data submitted by a form.
+ */
+function _picture_menu_field_submit($name, $entity, $form, &$form_state) {
+
 }
