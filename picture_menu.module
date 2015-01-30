@@ -44,11 +44,12 @@ function picture_menu_field_instance_settings_form($field, $instance) {
     '#title' => t('Header Tag'),
     '#default_value' => $settings['headertag'],
     '#options' => array(
-      t('h1'),
-      t('h2'),
-      t('h3'),
-      t('h4'),
-      t('h5'),      
+      'span' => t('span'),
+      'h1' => t('h1'),
+      'h2' => t('h2'),
+      'h3' => t('h3'),
+      'h4' => t('h4'),
+      'h5' => t('h5'),      
     ),
     '#description' => t('Controls which header tag is used for the item titles - accessibility guidelines may require a specific header level.'),
   );
@@ -77,7 +78,16 @@ function picture_menu_form_field_ui_field_edit_form_alter(&$form, &$form_state, 
  * Implements hook_field_validate().
  */
 function picture_menu_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
-  text_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, $errors);
+  foreach ($items as $delta => $item) {
+    if(!empty($item['header'])) {
+      if($item['fid'] == 0) {
+        $errors[$field['field_name']][$langcode][$delta][] = array(
+          'error' => 'image_missing',
+          'message' => t('%name: an image is required', array('%name' => $instance['label'])),
+        );
+      }
+    }
+  }
 }
 
 
@@ -96,7 +106,10 @@ function picture_menu_field_load($entity_type, $entities, $field, $instances, $l
  * Implements hook_field_is_empty().
  */
 function picture_menu_field_is_empty($item, $field) {
-  return text_field_is_empty($item, NULL);
+  if(empty($item['header'])) {
+    return TRUE;
+  }
+  return FALSE; 
 }
 
 
@@ -136,17 +149,13 @@ function picture_menu_field_formatter_settings_summary($field, $instance, $view_
  * Implements hook_field_formatter_view().
  */
 function picture_menu_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
-  $element = array();
-  foreach ($items as $delta => $item) {
-    $element[$delta] = array(
-      '#header' => $item['header'],
-      '#body' => $item['fid'],
-    );
-  }
+
+
   $result = array(
     array(
       '#markup' => theme('picture_menu', array(
         'items' => $items,
+        'headertag' => $instance['settings']['headertag'],
       )),
     ),
   );
@@ -161,16 +170,20 @@ function picture_menu_field_formatter_view($entity_type, $entity, $field, $insta
 function theme_picture_menu($vars) {
   $output = '';
 
-  $output .= '<div id="' . drupal_html_id('picture-menu') . '">';
+  $output .= '<div id="' . drupal_html_id('picture-menu') . '" class="picture-menu">';
   foreach($vars['items'] as $delta => $item) {
-    $output .= theme_picture_menu_item($item, $delta);
+    $output .= theme_picture_menu_item($item, $delta, $vars['headertag']);
   }
   $output .= '</div>';
   return $output;
 }
 
-function theme_picture_menu_item($item, $delta) {
-  $output = "item$delta";
+function theme_picture_menu_item($item, $delta, $headertag) {
+  $output = '<div class="picture-menu-item">';
+  $output .= '  <div class="picture-menu-item-header"><' . $headertag . '>' . $item['header'] . '</' . $headertag . '></div>';
+  $output .= '  <div class="picture-menu-item-image"><img src="' . file_create_url(file_load($item['fid'])->uri) . '" alt="' . $item['header'] . '"/></div>';
+  $output .= '  <div class="picture-menu-item-description">' . $item['description'] . '</div>';
+  $output .= '</div>';
   return $output;
 }
 
@@ -210,6 +223,7 @@ function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance,
     '#size' => 80,
     '#maxlength' => 255,
     '#description' => 'The header above the image',
+    '#required' => FALSE,
   );
   
   $element['fid'] = array(
@@ -218,6 +232,7 @@ function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance,
     '#description' => t('The image to use for this item'),
     '#default_value' => isset($items[$delta]['fid'])? $items[$delta]['fid'] : NULL,
     '#upload_location' => 'public://picture_menu_images/',
+    '#required' => FALSE,
   );
   
   $element['description'] = array(
@@ -278,7 +293,7 @@ function picture_menu_field_attach_form($entity_type, $entity, &$form, &$form_st
  * Implements hook_field_attach_submit().
  */
 function picture_menu_field_attach_submit($entity_type, $entity, $form, &$form_state) {
-  _picture_menu_field_invoke('submit', $entity_type, $entity, $form, $form_state);
+  //_picture_menu_field_invoke('submit', $entity_type, $entity, $form, $form_state);
 }
 
 
@@ -394,28 +409,6 @@ function _picture_menu_field_form($name, $entity, &$form, $form_state) {
   foreach ($form[$name] as $l => &$field) {
     if ('#' !== $l[0]) {
       $field['#theme'] = 'picture_menu_admin';
-    }
-  }
-}
-
-function _picture_menu_field_submit($name, $entity, $form, &$form_state) {
-  foreach ($form_state['values'][$name] as $l => &$items) {
-    if (isset($items['add_more'])) {
-      unset($items['add_more']);
-    }
-   
-    $weights = array();
-    foreach ($items as $delta => $item) {
-      $weights[] = $items[$delta]['_weight'];
-    }
-    sort($weights);
-    usort($items, '_field_sort_items_helper');
-    $items[0]['parent'] = 0;
-    while (count($items) && !$items[count($items) - 1]['description']) {
-      array_pop($items);
-    }
-    if (array() !== $items || isset($entity->{$name}[$l])) {
-      $entity->{$name}[$l] = $items;
     }
   }
 }
