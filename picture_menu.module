@@ -233,11 +233,13 @@ function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance,
     '#required' => FALSE,
   );
   
+  // Make the max and min resolutions match the settings.  Array is (max heightxmax width, min heightxmin width)
+  $imagesize = array($instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth'], $instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth']);
   
   $fid_validators = array(
     'file_validate_size' => array(1024*1024),
     'file_validate_extensions' => array("png gif jpg jpeg"),
-    'file_validate_image_resolution' => array("100x100", "100x100"), // max heightxwidth, min heightxwidth
+    'file_validate_image_resolution' => $imagesize,
   );
   $element['fid'] = array(
     '#title' => 'Image',
