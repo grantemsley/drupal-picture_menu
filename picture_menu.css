@@ -1,0 +1,13 @@
+.picture-menu-item {
+  padding-top: 16px;
+  padding-right: 16px;
+  float: left;
+  overflow: hidden;
+}
+
+.picture-menu-item-header h1, .picture-menu-item-header h2, .picture-menu-item-header h3, .picture-menu-item-header h4, .picture-menu-item-header h5, .picture-menu-item-header span {
+  height: 2.4em;
+  line-height: 1em;
+  overflow: hidden;
+  text-align: center;
+}

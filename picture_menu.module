@@ -112,7 +112,7 @@ function picture_menu_field_validate($entity_type, $entity, $field, $instance, $
         );
       }
       // Make sure there is a valid link
-      if(!valid_url($item['link'])) {
+      if(!valid_url(url($item['link']))) {
         $errors[$field['field_name']][$langcode][$delta][] = array(
           'error' => 'invalid_link',
           'message' => t('%name: link is invalid', array('%name' => $instance['label'])),
@@ -132,6 +132,34 @@ function picture_menu_field_is_empty($item, $field) {
   }
   return FALSE; 
 }
+
+
+/**
+ * Implements hook_field_presave().
+ */
+function picture_menu_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
+var_dump($instance);
+  // Mark the files in the managed_file field as being permenantly used, so Drupal doesn't delete them.
+  foreach ($items as $delta => $item) {
+    if(empty($item['fid'])) {
+      continue;
+    }
+    $file = file_load($item['fid']);
+    if (empty($file)) {
+      continue;
+    }
+    if (!$file->status) {
+      // Mark the file as permanently in use
+      $file->status = FILE_STATUS_PERMANENT;
+      file_save($file);
+      // Show that this module is using it, for this entity type and id
+      list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
+      file_usage_add($file, 'picture_menu', $entity_type, $id); 
+    }
+  }
+}
+
+
 
 
 /**
@@ -174,6 +202,7 @@ function picture_menu_field_formatter_view($entity_type, $entity, $field, $insta
  */
 
 function theme_picture_menu($vars) {
+  drupal_add_css(drupal_get_path('module', 'picture_menu') . '/picture_menu.css');
   $output = '';
 
   $output .= '<div id="' . drupal_html_id('picture-menu') . '" class="picture-menu">';
@@ -185,10 +214,15 @@ function theme_picture_menu($vars) {
 }
 
 function theme_picture_menu_item($item, $delta, $headertag, $imageheight, $imagewidth) {
+  $url = check_url(url($item['link']));
+  
   $output = '<div class="picture-menu-item" style="width: ' . $imagewidth . 'px;">';
-  $output .= '  <div class="picture-menu-item-header"><' . $headertag . '>' . check_plain($item['header']) . '</' . $headertag . '></div>';
-  $output .= '  <div class="picture-menu-item-image"><img src="' . file_create_url(file_load($item['fid'])->uri) . '" alt="' . check_plain($item['header']) . '" style="height: ' . $imageheight . 'px; width: ' . $imagewidth . 'px;"/></div>';
-  $output .= '  <a href="' . url($item['link']) . '">' . check_url(url($item['link'])) . '</a>';
+  $output .= '  <div class="picture-menu-item-header"><a href="' . $url . '"><' . $headertag . '>' . check_plain($item['header']) . '</' . $headertag . '></a></div>';
+  $output .= '  <div class="picture-menu-item-image">';
+  $output .= '    <a href="' . $url . '">';
+  $output .= '      <img src="' . file_create_url(file_load($item['fid'])->uri) . '" alt="' . check_plain($item['header']) . '" style="height: ' . $imageheight . 'px; width: ' . $imagewidth . 'px;"/>';
+  $output .= '    </a>';
+  $output .= '  </div>';
   $output .= '  <div class="picture-menu-item-description">' . check_plain($item['description']) . '</div>';
   $output .= '</div>';
   return $output;
