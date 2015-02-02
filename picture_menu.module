@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Defines hierarchical text field types.
+ * Defines a picture menu
  */
 
 
@@ -51,7 +51,7 @@ function picture_menu_field_instance_settings_form($field, $instance) {
       'h2' => t('h2'),
       'h3' => t('h3'),
       'h4' => t('h4'),
-      'h5' => t('h5'),      
+      'h5' => t('h5'),
     ),
     '#description' => t('Controls which header tag is used for the item titles - accessibility guidelines may require a specific header level.'),
   );
@@ -124,17 +124,6 @@ function picture_menu_field_validate($entity_type, $entity, $field, $instance, $
 
 
 /**
- * Implements hook_field_load().
- */
-function picture_menu_field_load($entity_type, $entities, $field, $instances, $langcode, &$items) {
-  foreach ($entities as $id => $entity) {
-    foreach ($items[$id] as $delta => $item) {
-    }
-  }
-}
-
-
-/**
  * Implements hook_field_is_empty().
  */
 function picture_menu_field_is_empty($item, $field) {
@@ -159,23 +148,6 @@ function picture_menu_field_formatter_info() {
     ),
   );
 }
-
-
-/**
- * Implements hook_field_formatter_settings_form().
- */
-function picture_menu_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state) {
-  return text_field_formatter_settings_form($field, $instance, $view_mode, $form, $form_state);
-}
-
-
-/**
- * Implements hook_field_formatter_settings_summary().
- */
-function picture_menu_field_formatter_settings_summary($field, $instance, $view_mode) {
-  return text_field_formatter_settings_summary($field, $instance, $view_mode);
-}
-
 
 /**
  * Implements hook_field_formatter_view().
@@ -212,6 +184,7 @@ function theme_picture_menu($vars) {
   return $output;
 }
 
+function theme_picture_menu_item($item, $delta, $headertag, $imageheight, $imagewidth) {
   $output = '<div class="picture-menu-item" style="width: ' . $imagewidth . 'px;">';
   $output .= '  <div class="picture-menu-item-header"><' . $headertag . '>' . check_plain($item['header']) . '</' . $headertag . '></div>';
   $output .= '  <div class="picture-menu-item-image"><img src="' . file_create_url(file_load($item['fid'])->uri) . '" alt="' . check_plain($item['header']) . '" style="height: ' . $imageheight . 'px; width: ' . $imagewidth . 'px;"/></div>';
@@ -296,15 +269,6 @@ function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance,
 }
 
 /**
- * Implements hook_field_presave().
- */
-function picture_menu_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
-  foreach ($items as $delta => $item) {
-  }
-}
-
-
-/**
  * Implements hook_field_widget_error().
  */
 function picture_menu_field_widget_error($element, $error, $form, &$form_state) {
@@ -338,25 +302,6 @@ function _picture_menu_field_invoke($op, $entity_type, $entity, &$form, &$form_s
 function picture_menu_field_attach_form($entity_type, $entity, &$form, &$form_state) {
   _picture_menu_field_invoke('form', $entity_type, $entity, $form, $form_state);
 }
-
-
-/**
- * Implements hook_field_attach_submit().
- */
-function picture_menu_field_attach_submit($entity_type, $entity, $form, &$form_state) {
-  //_picture_menu_field_invoke('submit', $entity_type, $entity, $form, $form_state);
-}
-
-
-
-
-/**
- * Implements hook_field_prepare_translation().
- */
-function picture_menu_field_prepare_translation($entity_type, $entity, $field, $instance, $langcode, &$items, $source_entity, $source_langcode) {
-  text_field_prepare_translation($entity_type, $entity, $field, $instance, $langcode, $items, $source_entity, $source_langcode);
-}
-
 
 /**
  * Implements hook_filter_format_update().
