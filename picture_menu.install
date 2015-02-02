@@ -19,7 +19,12 @@ function picture_menu_field_schema($field) {
       'fid' => array(
         'type' => 'int',
         'not null' => FALSE,
-      ),    
+      ),
+      'link' => array(
+        'type' => 'varchar',
+        'length' => '2083',
+        'not null' => TRUE,
+      ),
       'description' => array(
         'type' => 'text',
         'size' => 'normal',

@@ -16,6 +16,8 @@ function picture_menu_field_info() {
       'description' => t('This field creates picture menus with a header, image and description'),
       'instance_settings' => array(
         'headertag' => 'h3',
+        'imageheight' => '300',
+        'imagewidth' => '300',
       ),
       'default_widget' => 'picture_menu_widget',
       'default_formatter' => 'picture_menu_default',
@@ -53,6 +55,28 @@ function picture_menu_field_instance_settings_form($field, $instance) {
     ),
     '#description' => t('Controls which header tag is used for the item titles - accessibility guidelines may require a specific header level.'),
   );
+  
+  $form['imageheight'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Image Height'),
+    '#default_value' => $settings['imageheight'],
+    '#description' => t('Controls the height of the image.  eg. "300".  Sizes are in pixels'),
+    '#size' => 30,
+    '#maxlength' => 30,
+    '#required' => TRUE,
+    '#element_validate' => array('element_validate_integer_positive'),
+  );
+  
+  $form['imagewidth'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Image Width'),
+    '#default_value' => $settings['imagewidth'],
+    '#description' => t('Controls the width of the image and associated menu item.  eg. "300".  Sizes are in pixels.'),
+    '#size' => 30,
+    '#maxlength' => 30,
+    '#required' => TRUE,
+    '#element_validate' => array('element_validate_integer_positive'),
+  );
 
   return $form;
 }
@@ -80,10 +104,18 @@ function picture_menu_form_field_ui_field_edit_form_alter(&$form, &$form_state, 
 function picture_menu_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
   foreach ($items as $delta => $item) {
     if(!empty($item['header'])) {
+      // Make sure there is a picture
       if($item['fid'] == 0) {
         $errors[$field['field_name']][$langcode][$delta][] = array(
           'error' => 'image_missing',
           'message' => t('%name: an image is required', array('%name' => $instance['label'])),
+        );
+      }
+      // Make sure there is a valid link
+      if(!valid_url($item['link'])) {
+        $errors[$field['field_name']][$langcode][$delta][] = array(
+          'error' => 'invalid_link',
+          'message' => t('%name: link is invalid', array('%name' => $instance['label'])),
         );
       }
     }
@@ -156,6 +188,8 @@ function picture_menu_field_formatter_view($entity_type, $entity, $field, $insta
       '#markup' => theme('picture_menu', array(
         'items' => $items,
         'headertag' => $instance['settings']['headertag'],
+        'imageheight' => $instance['settings']['imageheight'],
+        'imagewidth' => $instance['settings']['imagewidth'],        
       )),
     ),
   );
@@ -172,17 +206,17 @@ function theme_picture_menu($vars) {
 
   $output .= '<div id="' . drupal_html_id('picture-menu') . '" class="picture-menu">';
   foreach($vars['items'] as $delta => $item) {
-    $output .= theme_picture_menu_item($item, $delta, $vars['headertag']);
+    $output .= theme_picture_menu_item($item, $delta, $vars['headertag'], $vars['imageheight'], $vars['imagewidth']);
   }
   $output .= '</div>';
   return $output;
 }
 
-function theme_picture_menu_item($item, $delta, $headertag) {
-  $output = '<div class="picture-menu-item">';
-  $output .= '  <div class="picture-menu-item-header"><' . $headertag . '>' . $item['header'] . '</' . $headertag . '></div>';
-  $output .= '  <div class="picture-menu-item-image"><img src="' . file_create_url(file_load($item['fid'])->uri) . '" alt="' . $item['header'] . '"/></div>';
-  $output .= '  <div class="picture-menu-item-description">' . $item['description'] . '</div>';
+  $output = '<div class="picture-menu-item" style="width: ' . $imagewidth . 'px;">';
+  $output .= '  <div class="picture-menu-item-header"><' . $headertag . '>' . check_plain($item['header']) . '</' . $headertag . '></div>';
+  $output .= '  <div class="picture-menu-item-image"><img src="' . file_create_url(file_load($item['fid'])->uri) . '" alt="' . check_plain($item['header']) . '" style="height: ' . $imageheight . 'px; width: ' . $imagewidth . 'px;"/></div>';
+  $output .= '  <a href="' . url($item['link']) . '">' . check_url(url($item['link'])) . '</a>';
+  $output .= '  <div class="picture-menu-item-description">' . check_plain($item['description']) . '</div>';
   $output .= '</div>';
   return $output;
 }
@@ -240,6 +274,16 @@ function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance,
     '#upload_location' => 'public://picture_menu_images/',
     '#required' => FALSE,
     '#upload_validators' => $fid_validators,
+  );
+  
+  $element['link'] = array(
+    '#title' => 'Link',
+    '#type' => 'textfield',
+    '#default_value' => isset($items[$delta]['link'])? $items[$delta]['link'] : NULL,
+    '#size' => 80,
+    '#maxlength' => 2083,
+    '#description' => 'Link for this item',
+    '#required' => FALSE,
   );
   
   $element['description'] = array(
