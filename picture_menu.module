@@ -305,7 +305,7 @@ function picture_menu_field_widget_process($element, &$form_state, $form) {
     '#type' => 'textfield',
     '#default_value' => isset($item['link'])? $item['link'] : NULL,
     '#maxlength' => 2083,
-    '#description' => t('Link for this item. External links must start with "http(s)://"'),
+    '#description' => t('Link for this item. External links must start with "http(s)://", internal links must <b>not</b> have a leading slash.'),
     '#required' => FALSE,
     '#prefix' => '<div class="container-inline">',
     '#suffix' => '</div>',
