@@ -135,34 +135,6 @@ function picture_menu_field_is_empty($item, $field) {
 
 
 /**
- * Implements hook_field_presave().
- */
-function picture_menu_field_presave($entity_type, $entity, $field, $instance, $langcode, &$items) {
-var_dump($instance);
-  // Mark the files in the managed_file field as being permenantly used, so Drupal doesn't delete them.
-  foreach ($items as $delta => $item) {
-    if(empty($item['fid'])) {
-      continue;
-    }
-    $file = file_load($item['fid']);
-    if (empty($file)) {
-      continue;
-    }
-    if (!$file->status) {
-      // Mark the file as permanently in use
-      $file->status = FILE_STATUS_PERMANENT;
-      file_save($file);
-      // Show that this module is using it, for this entity type and id
-      list($id, $vid, $bundle) = entity_extract_ids($entity_type, $entity);
-      file_usage_add($file, 'picture_menu', $entity_type, $id); 
-    }
-  }
-}
-
-
-
-
-/**
  * Implements hook_field_formatter_info().
  */
 function picture_menu_field_formatter_info() {
@@ -237,6 +209,10 @@ function picture_menu_field_widget_info() {
     'picture_menu_widget' => array(
       'label' => t('Picture menu'),
       'field types' => array('picture_menu'),
+      'settings' => array(
+        'progress_indicator' => 'throbber',
+        'preview_image_style' => 'thumbnail',
+      ),
     ),
   );
 }
@@ -257,52 +233,69 @@ function picture_menu_field_widget_settings_form($field, $instance) {
  *
  */
 function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
-  $element['header'] = array(
-    '#title' => 'Header',
-    '#type' => 'textfield',
-    '#default_value' => isset($items[$delta]['header'])? $items[$delta]['header'] : NULL,
-    '#size' => 80,
-    '#maxlength' => 255,
-    '#description' => 'The header above the image',
-    '#required' => FALSE,
-  );
+  // Add some settings file_field_widget_form() expects
+  $field['settings']['display_field'] = 0;
+  $field['settings']['uri_scheme'] = 'public';
+  $instance['settings']['file_directory'] = 'picture_menu_images';
+  $instance['settings']['progress_indicator'] = 'throbber'; //FIXME
+  $elements = file_field_widget_form($form, $form_state, $field, $instance, $langcode, $items, $delta, $element);
+  $settings = $instance['settings'];
   
-  // Make the max and min resolutions match the settings.  Array is (max heightxmax width, min heightxmin width)
+  // Add upload resolution validation
   $imagesize = array($instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth'], $instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth']);
-  
   $fid_validators = array(
     'file_validate_size' => array(1024*1024),
     'file_validate_extensions' => array("png gif jpg jpeg"),
     'file_validate_image_resolution' => $imagesize,
   );
-  $element['fid'] = array(
-    '#title' => 'Image',
-    '#type' => 'managed_file',
-    '#description' => theme('file_upload_help', array('description' => t('The image to use for this menu item'), 'upload_validators' => $fid_validators)),
-    '#default_value' => isset($items[$delta]['fid'])? $items[$delta]['fid'] : NULL,
-    '#upload_location' => 'public://picture_menu_images/',
-    '#required' => FALSE,
-    '#upload_validators' => $fid_validators,
-  );
-  
-  $element['link'] = array(
-    '#title' => 'Link',
-    '#type' => 'textfield',
-    '#default_value' => isset($items[$delta]['link'])? $items[$delta]['link'] : NULL,
-    '#size' => 80,
-    '#maxlength' => 2083,
-    '#description' => 'Link for this item',
-    '#required' => FALSE,
-  );
-  
-  $element['description'] = array(
-    '#title' => 'Description',
-    '#type' => 'textfield',
-    '#default_value' => isset($items[$delta]['description']) ? $items[$delta]['description'] : NULL,
-    '#description' => 'The short description that appears under the image',
-  );
-  return $element;
+  foreach(element_children($elements) as $delta) {
+    $elements[$delta]['#upload_validators'] = $fid_validators;
+    
+    // Add extra functionality provided by the picture_menu widget.
+    $elements[$delta]['#process'][] = 'picture_menu_widget_process';
+  }
 }
+
+
+/**
+ * An element #process callback for the picture_menu field type
+ * Expands the form to include extra fields.
+ */
+function picture_menu_field_widget_process($element, &$form_state, $form) {
+  $item = $element['#value'];
+  $item['fid'] = $element['fid']['#value'];
+  $instance = field_widget_instance($element, $form_state);
+
+  $settings = $instance['settings'];
+  $widget_settings = $instance['widget']['settings'];
+
+  $element['#theme'] = 'image_widget';
+  $element['#attached']['css'][] = drupal_get_path('module', 'image') . '/image.css';
+  
+  // Add the additional alt and title fields.
+  $element['alt'] = array(
+    '#title' => t('Alternate text'),
+    '#type' => 'textfield',
+    '#default_value' => isset($item['alt']) ? $item['alt'] : '',
+    '#description' => t('This text will be used by screen readers, search engines, or when the image cannot be loaded.'),
+    // @see http://www.gawds.org/show.php?contentid=28
+    '#maxlength' => 512,
+    '#weight' => -2,
+    '#access' => (bool) $item['fid'] && $settings['alt_field'],
+  );
+  $element['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#default_value' => isset($item['title']) ? $item['title'] : '',
+    '#description' => t('The title is used as a tool tip when the user hovers the mouse over the image.'),
+    '#maxlength' => 1024,
+    '#weight' => -1,
+    '#access' => (bool) $item['fid'] && $settings['title_field'],
+  );
+
+  return $element;  
+}
+
 
 /**
  * Implements hook_field_widget_error().
