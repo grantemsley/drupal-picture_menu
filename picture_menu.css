@@ -7,8 +7,14 @@
   padding-right: 16px;
   float: left;
   overflow: hidden;
-  height: 400px;
+  height: 300px;
 }
+
+/* Token Embed Views for some reason adds a <br> tag above the header, and a <p></p> after the header.  No idea why, but lets hide them */
+.picture-menu-item-header br, .picture-menu-item-header p {
+  display: none;
+}
+  
 
 .picture-menu-item-header h1, .picture-menu-item-header h2, .picture-menu-item-header h3, .picture-menu-item-header h4, .picture-menu-item-header h5, .picture-menu-item-header span {
   height: 2.4em;
