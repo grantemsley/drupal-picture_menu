@@ -18,6 +18,9 @@ function picture_menu_field_info() {
         'headertag' => 'h3',
         'imageheight' => '300',
         'imagewidth' => '300',
+        'file_extensions' => 'png gif jpg jpeg',
+        'file_directory' => 'picture_menu',
+        'max_filesize' => '1 MB',
       ),
       'default_widget' => 'picture_menu_widget',
       'default_formatter' => 'picture_menu_default',
@@ -169,25 +172,34 @@ function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance,
   // Add some settings file_field_widget_form() expects
   $field['settings']['display_field'] = 0;
   $field['settings']['uri_scheme'] = 'public';
-  $instance['settings']['file_directory'] = 'picture_menu_images';
   
   $elements = file_field_widget_form($form, $form_state, $field, $instance, $langcode, $items, $delta, $element);
   $settings = $instance['settings'];
-  
-  // Add upload resolution validation
-  $fid_validators = array(
-    'file_validate_size' => array(1024*1024),
-    'file_validate_extensions' => array("png gif jpg jpeg"),
-    'file_validate_image_resolution' => array($instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth'], $instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth']),
-  );
-  foreach(element_children($elements) as $delta) {
-    $elements[$delta]['#upload_validators'] = $fid_validators;
-    
-    // Add extra functionality provided by the picture_menu widget.
+
+  foreach (element_children($elements) as $delta) {
+    // Add upload resolution validation
+    if($instance['settings']['imageheight'] || $instance['settings']['imagewidth']) {
+      $elements[$delta]['#upload_validators']['file_validate_image_resolution'] = array($instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth'], $instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth']);
+    }
+    // If not using custom extension validation, ensure this is an image.
+    $supported_extensions = array('png', 'gif', 'jpg', 'jpeg');
+    $extensions = isset($elements[$delta]['#upload_validators']['file_validate_extensions'][0]) ? $elements[$delta]['#upload_validators']['file_validate_extensions'][0] : implode(' ', $supported_extensions);
+    $extensions = array_intersect(explode(' ', $extensions), $supported_extensions);
+    $elements[$delta]['#upload_validators']['file_validate_extensions'][0] = implode(' ', $extensions);
+
+    // Add all extra functionality provided by the picture_menu widget.
     $elements[$delta]['#process'][] = 'picture_menu_field_widget_process';
   }
-  $elements['#file_upload_description'] = theme('file_upload_help', array('upload_validators' => $elements[0]['#upload_validators']));
-  
+
+  if ($field['cardinality'] == 1) {
+    // If there's only one field, return it as delta 0.
+    if (empty($elements[0]['#default_value']['fid'])) {
+      $elements[0]['#description'] = theme('file_upload_help', array('description' => field_filter_xss($instance['description']), 'upload_validators' => $elements[0]['#upload_validators']));
+    }
+  }
+  else {
+    $elements['#file_upload_description'] = theme('file_upload_help', array('upload_validators' => $elements[0]['#upload_validators']));
+  }
   return $elements;
 }
 
@@ -204,8 +216,48 @@ function picture_menu_field_widget_process($element, &$form_state, $form) {
   $settings = $instance['settings'];
   $widget_settings = $instance['widget']['settings'];
 
-  $element['#theme'] = 'image_widget';
+  $element['#theme'] = 'picture_menu_widget';
   $element['#attached']['css'][] = drupal_get_path('module', 'image') . '/image.css';
+  
+  // Add the image preview.
+  if ($element['#file']) {
+    $variables = array(
+      'path' => $element['#file']->uri,
+    );
+
+    // Determine image dimensions.
+    if (isset($element['#value']['width']) && isset($element['#value']['height'])) {
+      $variables['width'] = $element['#value']['width'];
+      $variables['height'] = $element['#value']['height'];
+    }
+    else {
+      $info = image_get_info($element['#file']->uri);
+
+      if (is_array($info)) {
+        $variables['width'] = $info['width'];
+        $variables['height'] = $info['height'];
+      }
+      else {
+        $variables['width'] = $variables['height'] = NULL;
+      }
+    }
+
+    $element['preview'] = array(
+      '#type' => 'markup',
+      '#markup' => theme('image', $variables),
+    );
+
+    // Store the dimensions in the form so the file doesn't have to be accessed
+    // again. This is important for remote files.
+    $element['width'] = array(
+      '#type' => 'hidden',
+      '#value' => $variables['width'],
+    );
+    $element['height'] = array(
+      '#type' => 'hidden',
+      '#value' => $variables['height'],
+    );
+  }
   
   // Add the additional alt and title fields.
   $element['alt'] = array(
@@ -216,23 +268,75 @@ function picture_menu_field_widget_process($element, &$form_state, $form) {
     // @see http://www.gawds.org/show.php?contentid=28
     '#maxlength' => 512,
     '#weight' => -2,
-    '#access' => (bool) $item['fid'] && $settings['alt_field'],
+    '#prefix' => '<div class="container-inline">',
+    '#suffix' => '</div>',
   );
-  $element['title'] = array(
+  $element['header'] = array(
     '#type' => 'textfield',
-    '#title' => t('Title'),
-    '#default_value' => isset($item['title']) ? $item['title'] : '',
-    '#description' => t('The title is used as a tool tip when the user hovers the mouse over the image.'),
+    '#title' => t('Header'),
+    '#default_value' => isset($item['header']) ? $item['header'] : '',
+    '#description' => t('The header that goes above the image.'),
     '#maxlength' => 1024,
-    '#weight' => -1,
-    '#access' => (bool) $item['fid'] && $settings['title_field'],
+    '#weight' => -10,
+    '#prefix' => '<div class="container-inline">',
+    '#suffix' => '</div>',
+  );
+  $element['description'] = array(
+    '#title' => t('Description'),
+    '#type' => 'textfield',
+    '#default_value' => isset($item['description']) ? $item['description'] : NULL,
+    '#description' => t('The short description that appears under the image'),
+    '#prefix' => '<div class="container-inline">',
+    '#suffix' => '</div>',
+    '#maxlength' => 2000,
+    '#weight' => 40,
+  );
+  $element['link'] = array(
+    '#title' => t('Link'),
+    '#type' => 'textfield',
+    '#default_value' => isset($items[$delta]['link'])? $items[$delta]['link'] : NULL,
+    '#maxlength' => 2083,
+    '#description' => t('Link for this item'),
+    '#required' => FALSE,
+    '#prefix' => '<div class="container-inline">',
+    '#suffix' => '</div>',
+    '#weight' => 30,
   );
 
   return $element;  
 }
 
 
+/**
+ * Returns HTML for an image field widget.
+ *
+ * @param $variables
+ *   An associative array containing:
+ *   - element: A render element representing the image field widget.
+ *
+ * @ingroup themeable
+ */
+function theme_picture_menu_widget($variables) {
+  $element = $variables['element'];
+  $output = '';
+  $output .= '<div class="picture-menu-widget form-managed-file clearfix">';
 
+  if (isset($element['preview'])) {
+    $output .= '<div class="picture-menu-widget-preview">';
+    $output .= drupal_render($element['preview']);
+    $output .= '</div>';
+  }
+
+  $output .= '<div class="picture-menu-widget-data">';
+  if ($element['fid']['#value'] != 0) {
+    $element['filename']['#markup'] .= ' <span class="file-size">(' . format_size($element['#file']->filesize) . ')</span> ';
+  }
+  $output .= drupal_render_children($element);
+  $output .= '</div>';
+  $output .= '</div>';
+
+  return $output;
+}
 
 
 
@@ -416,6 +520,9 @@ function picture_menu_theme() {
       'render element' => 'element',
     ),
     'picture_menu' => array(
+      'render element' => 'element',
+    ),
+    'picture_menu_widget' => array(
       'render element' => 'element',
     ),
   );
