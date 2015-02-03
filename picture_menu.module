@@ -198,7 +198,7 @@ function picture_menu_field_widget_form(&$form, &$form_state, $field, $instance,
   foreach (element_children($elements) as $delta) {
     // Add upload resolution validation
     if($instance['settings']['imageheight'] || $instance['settings']['imagewidth']) {
-      $elements[$delta]['#upload_validators']['file_validate_image_resolution'] = array($instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth'], $instance['settings']['imageheight'] . "x" . $instance['settings']['imagewidth']);
+      $elements[$delta]['#upload_validators']['file_validate_image_resolution'] = array($instance['settings']['imagewidth'] . "x" . $instance['settings']['imageheight'], $instance['settings']['imagewidth'] . "x" . $instance['settings']['imageheight']);
     }
     // If not using custom extension validation, ensure this is an image.
     $supported_extensions = array('png', 'gif', 'jpg', 'jpeg');
