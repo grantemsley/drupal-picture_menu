@@ -3,6 +3,7 @@
   padding-right: 16px;
   float: left;
   overflow: hidden;
+  height: 400px;
 }
 
 .picture-menu-item-header h1, .picture-menu-item-header h2, .picture-menu-item-header h3, .picture-menu-item-header h4, .picture-menu-item-header h5, .picture-menu-item-header span {
