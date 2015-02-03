@@ -1,3 +1,7 @@
+.picture-menu {
+  display: inline-block;
+}
+
 .picture-menu-item {
   padding-top: 16px;
   padding-right: 16px;
@@ -11,4 +15,18 @@
   line-height: 1em;
   overflow: hidden;
   text-align: center;
+}
+
+
+/* Edit page widget CSS */
+
+.picture-menu-widget-preview {
+  /* Move the picture preview over to the right */
+  float: right;
+}
+
+.container-inline div label {
+  width: 8em;
+  display: inline-block;
+  text-align: right;
 }
