@@ -63,22 +63,22 @@ function picture_menu_field_instance_settings_form($field, $instance) {
     '#description' => t('Controls which header tag is used for the item titles - accessibility guidelines may require a specific header level.'),
   );
   
-  $form['imageheight'] = array(
+  $form['imagewidth'] = array(
     '#type' => 'textfield',
-    '#title' => t('Image Height'),
-    '#default_value' => $settings['imageheight'],
-    '#description' => t('Controls the height of the image.  eg. "300".  Sizes are in pixels'),
+    '#title' => t('Image Width'),
+    '#default_value' => $settings['imagewidth'],
+    '#description' => t('Controls the width of the image and associated menu item.  eg. "300".  Sizes are in pixels.'),
     '#size' => 30,
     '#maxlength' => 30,
     '#required' => TRUE,
     '#element_validate' => array('element_validate_integer_positive'),
   );
   
-  $form['imagewidth'] = array(
+  $form['imageheight'] = array(
     '#type' => 'textfield',
-    '#title' => t('Image Width'),
-    '#default_value' => $settings['imagewidth'],
-    '#description' => t('Controls the width of the image and associated menu item.  eg. "300".  Sizes are in pixels.'),
+    '#title' => t('Image Height'),
+    '#default_value' => $settings['imageheight'],
+    '#description' => t('Controls the height of the image.  eg. "300".  Sizes are in pixels'),
     '#size' => 30,
     '#maxlength' => 30,
     '#required' => TRUE,
@@ -394,8 +394,8 @@ function picture_menu_field_formatter_view($entity_type, $entity, $field, $insta
       '#markup' => theme('picture_menu_formatter', array(
         'items' => $items,
         'headertag' => $instance['settings']['headertag'],
-        'imageheight' => $instance['settings']['imageheight'],
         'imagewidth' => $instance['settings']['imagewidth'],
+        'imageheight' => $instance['settings']['imageheight'],
       )),
     ),
   );
